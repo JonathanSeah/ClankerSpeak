@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotebookLM Clone</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #FFF8E1 0%, #FFE0B2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { 
+            max-width: 900px; 
+            margin: 0 auto; 
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #00BFA5 0%, #00897B 100%);
+            color: white;
+            padding: 32px;
+            text-align: center;
+        }
+        .header h1 { font-size: 32px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; }
+        .section { padding: 32px; }
+        .upload-area {
+            border: 2px dashed #00BFA5;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: #F0F9F8;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover { background: #E0F4F2; border-color: #00897B; }
+        .upload-area input { display: none; }
+        .file-list { 
+            margin-top: 20px; 
+            display: grid;
+            gap: 12px;
+        }
+        .file-item {
+            background: #FFF8E1;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #FFC107;
+            font-size: 14px;
+        }
+        .question-area { margin-top: 24px; }
+        .question-input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #E0E0E0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
+        }
+        .question-input:focus {
+            outline: none;
+            border-color: #00BFA5;
+        }
+        .btn {
+            background: linear-gradient(135deg, #FF7043 0%, #E64A19 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 16px;
+            transition: transform 0.2s ease;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .answer-area {
+            margin-top: 32px;
+            padding: 24px;
+            background: #F5F5F5;
+            border-radius: 12px;
+            border-left: 4px solid #00BFA5;
+            display: none;
+        }
+        .answer-area.visible { display: block; }
+        .answer-area h3 { margin-bottom: 16px; color: #00897B; }
+        .loading { 
+            display: none;
+            text-align: center; 
+            color: #00BFA5; 
+            margin-top: 16px;
+        }
+        .loading.visible { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Your Personal NotebookLM</h1>
+            <p>Upload documents and ask questions. Powered by Gemini File Search.</p>
+        </div>
+        
+        <div class="section">
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <h3>📁 Drop files here or click to upload</h3>
+                <p style="margin-top: 8px; opacity: 0.7;">Supports PDF, TXT, DOC, DOCX, MD</p>
+                <input type="file" id="fileInput" multiple accept=".txt,.pdf,.doc,.docx,.md">
+            </div>
+            <div class="file-list" id="fileList"></div>
+        </div>
+        
+        <div class="section">
+            <div class="question-area">
+                <textarea 
+                    id="questionInput" 
+                    class="question-input" 
+                    placeholder="Ask a question about your documents..."></textarea>
+                <button class="btn" onclick="askQuestion()">Ask Question</button>
+                <div class="loading" id="loading">🤔 Thinking...</div>
+            </div>
+            <div class="answer-area" id="answerArea">
+                <h3>Answer:</h3>
+                <div id="answerText"></div>
+            </div>
+        </div>
+    </div>
+<script>
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const loading = document.getElementById('loading');
+        const answerArea = document.getElementById('answerArea');
+        const answerText = document.getElementById('answerText');
+        fileInput.addEventListener('change', async (e) => {
+            const files = e.target.files;
+            if (files.length === 0) return;
+            const formData = new FormData();
+            for (let file of files) {
+                formData.append('files', file);
+            }
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    fileList.innerHTML = result.files.map(file => 
+                        `<div class="file-item">✓ ${file.name}</div>`
+                    ).join('');
+                } else {
+                    alert('Upload failed: ' + result.error);
+                }
+            } catch (error) {
+                alert('Upload error: ' + error.message);
+            }
+        });
+        async function askQuestion() {
+            const question = document.getElementById('questionInput').value.trim();
+            if (!question) {
+                alert('Please enter a question');
+                return;
+            }
+            loading.classList.add('visible');
+            answerArea.classList.remove('visible');
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    answerText.innerHTML = result.answer.replace(/\n/g, '<br>');
+                    answerArea.classList.add('visible');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Request failed: ' + error.message);
+            } finally {
+                loading.classList.remove('visible');
+            }
+        }
+    </script>
+</body>
+</html>
