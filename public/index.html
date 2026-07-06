@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Script Forge — presentation script console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">SF</span>
+      <div class="brand-text">
+        <span class="brand-name">Script Forge</span>
+        <span class="brand-sub">source-grounded presentation scripts</span>
+      </div>
+    </div>
+    <div class="logline" aria-hidden="true">
+      <div class="logline-track" id="loglineTrack"></div>
+    </div>
+    <div class="status-chip" id="apiStatus">
+      <span class="dot"></span> checking backend…
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Source intake method">
+    <button class="tab active" data-tab="upload" role="tab" aria-selected="true">
+      <span class="tab-cmd">$ upload</span><span class="tab-label">Upload sources</span>
+    </button>
+    <button class="tab" data-tab="paste" role="tab" aria-selected="false">
+      <span class="tab-cmd">$ paste</span><span class="tab-label">Paste notes</span>
+    </button>
+    <button class="tab" data-tab="form" role="tab" aria-selected="false">
+      <span class="tab-cmd">$ brief</span><span class="tab-label">Guided brief</span>
+    </button>
+    <button class="tab" data-tab="chat" role="tab" aria-selected="false">
+      <span class="tab-cmd">$ chat</span><span class="tab-label">Talk it through</span>
+    </button>
+  </nav>
+
+  <main class="workspace">
+
+    <div class="panels">
+
+      <!-- UPLOAD -->
+      <section class="panel active" id="panel-upload">
+        <h2>Upload source material</h2>
+        <p class="hint">Drop in raw reports, slide drafts, or a grading rubric. Text is pulled from each file so the script stays grounded in what you actually submitted — nothing outside these files gets used as fact.</p>
+        <label class="dropzone" id="dropzone" for="fileInput">
+          <input type="file" id="fileInput" multiple accept=".txt,.md,.csv,.log,.pdf,.docx" hidden />
+          <span class="dropzone-icon">⇧</span>
+          <span class="dropzone-text">Drag files here, or click to browse</span>
+          <span class="dropzone-types">.txt · .md · .csv · .pdf · .docx</span>
+        </label>
+        <ul class="file-list" id="fileList"></ul>
+      </section>
+
+      <!-- PASTE -->
+      <section class="panel" id="panel-paste">
+        <h2>Paste raw notes</h2>
+        <p class="hint">Paste lecture notes, a project report, or a rough draft. Formatting doesn't matter — the backend reasons over the content.</p>
+        <textarea id="pasteArea" rows="14" placeholder="Paste your notes, report excerpt, or draft here…"></textarea>
+        <div class="char-count" id="pasteCount">0 characters</div>
+      </section>
+
+      <!-- FORM -->
+      <section class="panel" id="panel-form">
+        <h2>Guided brief</h2>
+        <p class="hint">No document yet? Answer a few prompts and the backend will reason from your answers instead of a source file.</p>
+        <div class="field">
+          <label for="formTopic">Topic</label>
+          <input type="text" id="formTopic" placeholder="e.g. Hardening a Linux server for the first time" />
+        </div>
+        <div class="field">
+          <label for="formPoints">Key points to cover (one per line)</label>
+          <textarea id="formPoints" rows="6" placeholder="Why default configs are risky&#10;Disabling unused services&#10;Setting up a basic firewall rule set"></textarea>
+        </div>
+        <div class="field">
+          <label for="formContext">Extra context</label>
+          <textarea id="formContext" rows="4" placeholder="Any background the script should reference — module name, project scope, assessment criteria…"></textarea>
+        </div>
+      </section>
+
+      <!-- CHAT -->
+      <section class="panel" id="panel-chat">
+        <h2>Talk it through</h2>
+        <p class="hint">Describe what you need conversationally. The assistant asks short follow-ups, then you finalize the transcript into a script.</p>
+        <div class="chat-window" id="chatWindow">
+          <div class="chat-msg assistant">Tell me what your presentation is about and who it's for — I'll ask a few follow-ups.</div>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Type a message…" />
+          <button class="btn-ghost" id="chatSend">Send</button>
+        </div>
+        <button class="btn-secondary" id="useChatBtn" disabled>Use this conversation ↓</button>
+      </section>
+
+    </div>
+
+    <aside class="settings-rail">
+      <h3>Script settings</h3>
+
+      <div class="field">
+        <label for="setAudience">Audience</label>
+        <input type="text" id="setAudience" value="Polytechnic security-management students" />
+      </div>
+
+      <div class="field">
+        <label for="setTone">Tone</label>
+        <select id="setTone">
+          <option>Confident and clear</option>
+          <option>Casual and conversational</option>
+          <option>Formal and technical</option>
+          <option>Reassuring, first-time presenter</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="setDuration">Target length: <span id="durationOut">5</span> min</label>
+        <input type="range" id="setDuration" min="2" max="15" value="5" />
+      </div>
+
+      <div class="field checkbox-field">
+        <label>
+          <input type="checkbox" id="setSpeakerNotes" checked />
+          Include speaker notes
+        </label>
+      </div>
+
+      <button class="btn-primary" id="generateBtn">Generate script</button>
+      <p class="rail-note" id="sourceSummary">No source loaded yet.</p>
+    </aside>
+
+  </main>
+
+  <section class="output" id="outputSection">
+    <div class="output-header">
+      <h2>Generated script</h2>
+      <div class="output-actions">
+        <button class="btn-ghost" id="copyBtn" disabled>Copy</button>
+        <button class="btn-ghost" id="downloadBtn" disabled>Download .txt</button>
+      </div>
+    </div>
+    <div class="output-body" id="outputBody">
+      <p class="placeholder">Your script will appear here once generated.</p>
+    </div>
+  </section>
+
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
