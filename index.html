@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini NotebookLM (Local RAG)</title>
+    <style>
+        :root {
+            --bg-color: #f4f6f9;
+            --card-bg: #ffffff;
+            --primary-color: #1a73e8;
+            --text-color: #333333;
+            --border-color: #dadce0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: var(--primary-color);
+            font-size: 24px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        textarea {
+            resize: vertical;
+            height: 150px;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #1557b0;
+        }
+
+        .output-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid var(--primary-color);
+            padding: 15px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Mini NotebookLM (RAG Simulation)</h1>
+    <p>NotebookLM does not have an API, so this script replicates its RAG behavior directly using the Gemini API.</p>
+    
+    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
+
+    <div class="section">
+        <label for="apiKey">1. Enter Gemini API Key</label>
+        <input type="text" id="apiKey" placeholder="AIzaSy..." type="password">
+    </div>
+
+    <div class="section">
+        <label for="sourceMaterial">2. Paste Source Material (Your Notebook Documents)</label>
+        <textarea id="sourceMaterial" placeholder="Paste the reference text, documents, or data the AI should use to answer..."></textarea>
+    </div>
+
+    <div class="section">
+        <label for="userQuery">3. Ask a Question about the Source</label>
+        <input type="text" id="userQuery" placeholder="e.g., What are the key takeaways from the text?">
+    </div>
+
+    <button id="submitBtn">Generate Answer</button>
+
+    <div id="responseContainer" class="section hidden">
+        <h3>Answer:</h3>
+        <div id="output" class="output-box">Processing...</div>
+    </div>
+</div>
+
+<script type="importmap">
+  {
+    "imports": {
+      "@google/genai": "https://esm.run/@google/genai"
+    }
+  }
+</script>
+
+<script type="module">
+    import { GoogleGenAI } from '@google/genai';
+
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const sourceMaterial = document.getElementById('sourceMaterial').value.trim();
+        const userQuery = document.getElementById('userQuery').value.trim();
+        const responseContainer = document.getElementById('responseContainer');
+        const output = document.getElementById('output');
+
+        // Validation
+        if (!apiKey) return alert('Please enter your Gemini API key.');
+        if (!sourceMaterial) return alert('Please provide source material.');
+        if (!userQuery) return alert('Please enter a question.');
+
+        // Show UI loading state
+        responseContainer.classList.remove('hidden');
+        output.textContent = "Analyzing source material and generating answer...";
+
+        try {
+            // Initialize the Gemini client
+            const ai = new GoogleGenAI({ apiKey: apiKey });
+
+            // Construct the RAG system prompt
+            const systemInstruction = `
+                You are a precise RAG assistant, operating exactly like NotebookLM. 
+                Your task is to answer the user's query using ONLY the provided Source Material.
+                If the answer cannot be found in the Source Material, state clearly that the information is missing.
+            `;
+
+            const prompt = `
+                SOURCE MATERIAL:
+                """
+                ${sourceMaterial}
+                """
+
+                USER QUERY: 
+                ${userQuery}
+            `;
+
+            // Call Gemini 2.5 Flash (ideal for fast, text-based RAG tasks)
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    systemInstruction: systemInstruction,
+                    temperature: 0.2 // Low temperature ensures adherence to the source text
+                }
+            });
+
+            // Display the text output
+            output.textContent = response.text;
+
+        } catch (error) {
+            console.error(error);
+            output.textContent = `Error: ${error.message || 'Failed to generate response. Check your API key and connection.'}`;
+        }
+    });
+</script>
+
+</body>
+</html>
