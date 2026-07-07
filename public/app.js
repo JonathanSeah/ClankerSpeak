@@ -2,17 +2,18 @@
   const state = {
     activeTab: 'upload',
     uploadedFiles: [], // { filename, text, charCount }
-    chatMessages: [],  // { role, content }
-    chatTranscriptText: '',
   };
+
+  const TAB_ORDER = ['upload', 'paste', 'form', 'chat'];
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---------- ambient log ticker (signature element) ----------
 
   const LOG_LINES = [
     '[source-grounding] waiting for input…',
     '[intake:upload] accepts .txt .md .csv .pdf .docx',
-    '[intake:chat] follow-up questions ready',
-    '[reasoning-backend] idle — no request in flight',
+    '[intake:ask] casual chat handled by Botpress',
+    '[reasoning-backend] Gemini idle — no request in flight',
     '[settings] audience + tone + duration feed the system prompt',
   ];
   const track = document.getElementById('loglineTrack');
@@ -36,23 +37,96 @@
     .then((data) => setStatus(true, data.hasApiKey))
     .catch(() => setStatus(false, false));
 
-  // ---------- tabs ----------
+  // ---------- tabs (with sliding transition) ----------
 
   const tabs = document.querySelectorAll('.tab');
-  const panels = document.querySelectorAll('.panel');
+  const panelsViewport = document.querySelector('.panels');
 
   tabs.forEach((tab) => {
-    tab.addEventListener('click', () => {
-      const name = tab.dataset.tab;
-      state.activeTab = name;
-      tabs.forEach((t) => {
-        t.classList.toggle('active', t === tab);
-        t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
-      });
-      panels.forEach((p) => p.classList.toggle('active', p.id === `panel-${name}`));
-      updateSourceSummary();
-    });
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
   });
+
+  function switchTab(name) {
+    if (name === state.activeTab) return;
+    const oldName = state.activeTab;
+    const oldPanel = document.getElementById(`panel-${oldName}`);
+    const newPanel = document.getElementById(`panel-${name}`);
+    const dir = TAB_ORDER.indexOf(name) > TAB_ORDER.indexOf(oldName) ? 1 : -1;
+
+    state.activeTab = name;
+    tabs.forEach((t) => {
+      const isActive = t.dataset.tab === name;
+      t.classList.toggle('active', isActive);
+      t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    if (name === 'chat') ensureBotpress();
+
+    if (prefersReducedMotion) {
+      oldPanel.classList.remove('active');
+      newPanel.classList.add('active');
+      updateSourceSummary();
+      updateGenerateAvailability();
+      return;
+    }
+
+    slidePanels(oldPanel, newPanel, dir);
+  }
+
+  function slidePanels(oldPanel, newPanel, dir) {
+    const container = panelsViewport;
+    container.style.height = `${container.offsetHeight}px`;
+    container.classList.add('sliding');
+
+    [oldPanel, newPanel].forEach((p) => {
+      p.classList.add('panel-anim');
+      p.style.position = 'absolute';
+      p.style.top = '0';
+      p.style.left = '0';
+      p.style.width = '100%';
+    });
+
+    oldPanel.classList.add('active');
+    newPanel.classList.add('active');
+    newPanel.style.transform = `translateX(${dir * 100}%)`;
+    newPanel.style.opacity = '0';
+
+    // force reflow so the starting transform actually applies before we animate
+    void newPanel.offsetWidth;
+
+    const endHeight = newPanel.scrollHeight;
+
+    requestAnimationFrame(() => {
+      oldPanel.style.transform = `translateX(${-dir * 100}%)`;
+      oldPanel.style.opacity = '0';
+      newPanel.style.transform = 'translateX(0)';
+      newPanel.style.opacity = '1';
+      container.style.height = `${endHeight}px`;
+    });
+
+    let cleaned = false;
+    function cleanup() {
+      if (cleaned) return;
+      cleaned = true;
+      [oldPanel, newPanel].forEach((p) => {
+        p.classList.remove('panel-anim');
+        p.style.position = '';
+        p.style.top = '';
+        p.style.left = '';
+        p.style.width = '';
+        p.style.transform = '';
+        p.style.opacity = '';
+      });
+      oldPanel.classList.remove('active');
+      container.classList.remove('sliding');
+      container.style.height = '';
+      updateSourceSummary();
+      updateGenerateAvailability();
+    }
+
+    newPanel.addEventListener('transitionend', cleanup, { once: true });
+    setTimeout(cleanup, 500); // safety net in case transitionend doesn't fire
+  }
 
   // ---------- upload tab ----------
 
@@ -147,59 +221,66 @@
     el.addEventListener('input', updateSourceSummary)
   );
 
-  // ---------- chat tab ----------
+  // ---------- chat tab (Botpress webchat) ----------
+  // The casual chatbot is entirely owned by Botpress's own cloud — we just
+  // mount their widget. No transcript from here ever reaches our /api/generate
+  // (Gemini) pipeline; see the hint text in the panel itself.
 
-  const chatWindow = document.getElementById('chatWindow');
-  const chatInput = document.getElementById('chatInput');
-  const chatSend = document.getElementById('chatSend');
-  const useChatBtn = document.getElementById('useChatBtn');
+  let botpressLoadPromise = null;
 
-  function appendChatMsg(role, content) {
-    const div = document.createElement('div');
-    div.className = `chat-msg ${role}`;
-    div.textContent = content;
-    chatWindow.appendChild(div);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+  function ensureBotpress() {
+    if (botpressLoadPromise) return botpressLoadPromise;
+
+    botpressLoadPromise = (async () => {
+      const placeholder = document.getElementById('botpressPlaceholder');
+      try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+
+        if (!config.botpressBotId || !config.botpressClientId) {
+          if (placeholder) {
+            placeholder.innerHTML =
+              'Assistant not configured yet — add BOTPRESS_BOT_ID and BOTPRESS_CLIENT_ID to .env.';
+          }
+          return;
+        }
+
+        await loadScript('https://cdn.botpress.cloud/webchat/v2.3/inject.js');
+
+        window.botpress.on('webchat:ready', () => {
+          if (placeholder) placeholder.remove();
+        });
+
+        window.botpress.init({
+          botId: config.botpressBotId,
+          clientId: config.botpressClientId,
+          selector: '#botpressWebchat',
+          configuration: {
+            botName: 'Script Forge Assistant',
+            color: '#2DD4BF',
+            variant: 'soft',
+            themeMode: 'dark',
+            fontFamily: 'inter',
+            radius: 2,
+          },
+        });
+      } catch (err) {
+        if (placeholder) placeholder.textContent = `⚠ Couldn't load the assistant (${err.message}).`;
+      }
+    })();
+
+    return botpressLoadPromise;
   }
 
-  async function sendChat() {
-    const text = chatInput.value.trim();
-    if (!text) return;
-    chatInput.value = '';
-    appendChatMsg('user', text);
-    state.chatMessages.push({ role: 'user', content: text });
-    chatSend.disabled = true;
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: state.chatMessages }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Chat request failed.');
-      appendChatMsg('assistant', data.reply);
-      state.chatMessages.push({ role: 'assistant', content: data.reply });
-      useChatBtn.disabled = false;
-    } catch (err) {
-      appendChatMsg('assistant', `⚠ ${err.message}`);
-    } finally {
-      chatSend.disabled = false;
-    }
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error(`failed to load ${src}`));
+      document.body.appendChild(s);
+    });
   }
-
-  chatSend.addEventListener('click', sendChat);
-  chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') sendChat();
-  });
-
-  useChatBtn.addEventListener('click', () => {
-    state.chatTranscriptText = state.chatMessages
-      .map((m) => `${m.role === 'user' ? 'Student' : 'Assistant'}: ${m.content}`)
-      .join('\n');
-    updateSourceSummary();
-    flashRailNote('Conversation captured — click "Generate script" when ready.');
-  });
 
   // ---------- shared source assembly ----------
 
@@ -225,7 +306,7 @@
           .join('\n\n');
       }
       case 'chat':
-        return state.chatTranscriptText;
+        return ''; // Botpress chat is intentionally not a script source
       default:
         return '';
     }
@@ -233,6 +314,10 @@
 
   const sourceSummary = document.getElementById('sourceSummary');
   function updateSourceSummary() {
+    if (state.activeTab === 'chat') {
+      sourceSummary.textContent = 'Chat tab is for quick questions — pick another tab to generate a script.';
+      return;
+    }
     const text = getSourceText();
     if (!text || !text.trim()) {
       sourceSummary.textContent = 'No source loaded yet.';
@@ -242,13 +327,7 @@
   }
 
   function tabDisplayName(name) {
-    return { upload: 'Upload sources', paste: 'Paste notes', form: 'Guided brief', chat: 'Talk it through' }[name];
-  }
-
-  function flashRailNote(msg) {
-    const original = sourceSummary.textContent;
-    sourceSummary.textContent = msg;
-    setTimeout(updateSourceSummary, 2200);
+    return { upload: 'Upload sources', paste: 'Paste notes', form: 'Guided brief', chat: 'Ask the assistant' }[name];
   }
 
   // ---------- settings ----------
@@ -263,11 +342,10 @@
       tone: document.getElementById('setTone').value,
       durationMinutes: Number(setDuration.value),
       includeSpeakerNotes: document.getElementById('setSpeakerNotes').checked,
-      keyPoints: state.activeTab === 'form' ? '' : undefined,
     };
   }
 
-  // ---------- generate ----------
+  // ---------- generate (Gemini via Google API key, server-side) ----------
 
   const generateBtn = document.getElementById('generateBtn');
   const outputBody = document.getElementById('outputBody');
@@ -275,10 +353,16 @@
   const downloadBtn = document.getElementById('downloadBtn');
   let lastScript = '';
 
+  function updateGenerateAvailability() {
+    const isChat = state.activeTab === 'chat';
+    generateBtn.disabled = isChat;
+    generateBtn.title = isChat ? 'Switch to Upload, Paste, or Brief to generate a script.' : '';
+  }
+
   generateBtn.addEventListener('click', async () => {
     const sourceText = getSourceText();
     if (!sourceText || !sourceText.trim()) {
-      alert('Add some source content first — upload a file, paste notes, fill the brief, or finalize a conversation.');
+      alert('Add some source content first — upload a file, paste notes, or fill the guided brief.');
       return;
     }
     generateBtn.disabled = true;
@@ -300,8 +384,8 @@
     } catch (err) {
       outputBody.innerHTML = `<p class="placeholder">⚠ ${escapeHtml(err.message)}</p>`;
     } finally {
-      generateBtn.disabled = false;
       generateBtn.textContent = 'Generate script';
+      updateGenerateAvailability();
     }
   });
 
@@ -336,4 +420,5 @@
   }
 
   updateSourceSummary();
+  updateGenerateAvailability();
 })();

@@ -3,20 +3,29 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Script Forge — presentation script console</title>
+<title>ClankerSpeak — presentation script console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
 
+<!-- Ambient moving background — a soft white blurred glow drifting over a
+     dark UI, the same idea as the Gemini screenshot but white instead of
+     blue. Purely decorative. -->
+<div class="aurora" aria-hidden="true">
+  <span class="aurora-blob blob-a"></span>
+  <span class="aurora-blob blob-b"></span>
+  <span class="aurora-blob blob-c"></span>
+</div>
+
 <div class="app">
 
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">SF</span>
+      <span class="brand-mark">CS</span>
       <div class="brand-text">
-        <span class="brand-name">Script Forge</span>
+        <span class="brand-name">ClankerSpeak</span>
         <span class="brand-sub">source-grounded presentation scripts</span>
       </div>
     </div>
@@ -39,7 +48,7 @@
       <span class="tab-cmd">$ brief</span><span class="tab-label">Guided brief</span>
     </button>
     <button class="tab" data-tab="chat" role="tab" aria-selected="false">
-      <span class="tab-cmd">$ chat</span><span class="tab-label">Talk it through</span>
+      <span class="tab-cmd">$ ask</span><span class="tab-label">Ask the assistant</span>
     </button>
   </nav>
 
@@ -86,18 +95,18 @@
         </div>
       </section>
 
-      <!-- CHAT -->
+      <!-- CHAT (Botpress) -->
       <section class="panel" id="panel-chat">
-        <h2>Talk it through</h2>
-        <p class="hint">Describe what you need conversationally. The assistant asks short follow-ups, then you finalize the transcript into a script.</p>
-        <div class="chat-window" id="chatWindow">
-          <div class="chat-msg assistant">Tell me what your presentation is about and who it's for — I'll ask a few follow-ups.</div>
+        <h2>Ask the assistant</h2>
+        <p class="hint">A casual, on-demand chat for working through a question or easing presentation nerves — powered by Botpress. It runs on its own and doesn't feed into "Generate script" below; switch to Upload, Paste, or Brief for that.</p>
+        <div class="botpress-shell">
+          <div id="botpressWebchat" class="botpress-frame">
+            <div class="botpress-placeholder" id="botpressPlaceholder">
+              <span class="botpress-dot"></span> loading assistant…
+            </div>
+          </div>
         </div>
-        <div class="chat-input-row">
-          <input type="text" id="chatInput" placeholder="Type a message…" />
-          <button class="btn-ghost" id="chatSend">Send</button>
-        </div>
-        <button class="btn-secondary" id="useChatBtn" disabled>Use this conversation ↓</button>
+        <p class="rail-note botpress-credit">Powered by Botpress · conversation stays separate from your source material.</p>
       </section>
 
     </div>

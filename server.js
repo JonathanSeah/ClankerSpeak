@@ -125,6 +125,17 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, hasApiKey: Boolean(API_KEY) });
 });
 
+// Non-secret client-side identifiers for the Botpress webchat widget
+// (the casual chatbot tab). These are public IDs, not API keys — Botpress's
+// own cloud handles that conversation end-to-end, so nothing here ever
+// touches GOOGLE_API_KEY or the Gemini pipeline below.
+app.get('/api/config', (req, res) => {
+  res.json({
+    botpressBotId: process.env.BOTPRESS_BOT_ID || null,
+    botpressClientId: process.env.BOTPRESS_CLIENT_ID || null,
+  });
+});
+
 // Upload one or more source files (the "NotebookLM-style" grounding tab).
 app.post('/api/upload', upload.array('files', 10), async (req, res) => {
   try {
@@ -145,27 +156,6 @@ app.post('/api/upload', upload.array('files', 10), async (req, res) => {
     res.json({ files: results });
   } catch (err) {
     res.status(400).json({ error: err.message });
-  }
-});
-
-// One turn of the conversational intake tab.
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { messages = [] } = req.body;
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ error: 'messages must be a non-empty array.' });
-    }
-    const system = [
-      'You are a friendly intake assistant chatting with a student before a script is written.',
-      'Ask short, specific follow-up questions to pin down: the topic, the key points to cover,',
-      'the audience, the tone, and how long the talk should run.',
-      'Keep each reply to 2-3 sentences. Once you have enough detail, tell the student they can',
-      'click "Use this conversation" to generate the script.',
-    ].join(' ');
-    const reply = await callGemini({ system, messages });
-    res.json({ reply });
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

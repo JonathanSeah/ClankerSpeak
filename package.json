@@ -1,7 +1,7 @@
 {
   "name": "script-forge",
   "version": "1.0.0",
-  "description": "Console for feeding source material to an AI backend and generating presentation scripts.",
+  "description": "Console for feeding source material to Gemini for script generation, with a separate Botpress-powered casual chat.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
