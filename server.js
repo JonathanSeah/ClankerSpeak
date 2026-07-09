@@ -90,11 +90,14 @@ async function callGemini({ system, messages }) {
     parts: [{ text: m.content }],
   }));
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-goog-api-key': API_KEY,
+    },
     body: JSON.stringify({
       systemInstruction: { role: 'system', parts: [{ text: system }] },
       contents,
