@@ -8,8 +8,11 @@ const pdfParse = require('pdf-parse');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PROVIDER = (process.env.LLM_PROVIDER || 'google').toLowerCase(); // 'google' or 'openrouter'
 const MODEL = process.env.MODEL || 'gemini-flash-latest';
 const API_KEY = process.env.GOOGLE_API_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -122,10 +125,56 @@ async function callGemini({ system, messages }) {
   return candidate.content.parts.map((p) => p.text || '').join('\n');
 }
 
+// messages: [{ role: 'user' | 'assistant', content: string }]
+async function callOpenRouter({ system, messages }) {
+  if (!OPENROUTER_API_KEY) {
+    const err = new Error(
+      'No OPENROUTER_API_KEY set on the server. Copy .env.example to .env and add your OpenRouter key.'
+    );
+    err.status = 500;
+    throw err;
+  }
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [{ role: 'system', content: system }, ...messages],
+      max_tokens: 2000,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    const err = new Error(`OpenRouter API error (${response.status}): ${text}`);
+    err.status = 502;
+    throw err;
+  }
+
+  const data = await response.json();
+  const choice = data.choices && data.choices[0];
+  if (!choice || !choice.message) {
+    const err = new Error('OpenRouter returned no choices (it may have blocked the request).');
+    err.status = 502;
+    throw err;
+  }
+  return choice.message.content || '';
+}
+
+// Dispatches to whichever provider is configured via LLM_PROVIDER.
+async function callLLM(args) {
+  return PROVIDER === 'openrouter' ? callOpenRouter(args) : callGemini(args);
+}
+
 // ---------- routes ----------
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(API_KEY) });
+  const hasApiKey = PROVIDER === 'openrouter' ? Boolean(OPENROUTER_API_KEY) : Boolean(API_KEY);
+  res.json({ ok: true, provider: PROVIDER, hasApiKey });
 });
 
 // Non-secret client-side identifiers for the Botpress webchat widget
@@ -170,7 +219,7 @@ app.post('/api/generate', async (req, res) => {
       return res.status(400).json({ error: 'No source content was provided.' });
     }
     const system = buildSystemPrompt(settings);
-    const script = await callGemini({
+    const script = await callLLM({
       system,
       messages: [
         {
@@ -187,7 +236,11 @@ app.post('/api/generate', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Script Forge running at http://localhost:${PORT}`);
-  if (!API_KEY) {
+  console.log(`LLM provider: ${PROVIDER}`);
+  if (PROVIDER === 'openrouter' && !OPENROUTER_API_KEY) {
+    console.log('Warning: OPENROUTER_API_KEY is not set. Generation calls will fail until it is.');
+  }
+  if (PROVIDER === 'google' && !API_KEY) {
     console.log('Warning: GOOGLE_API_KEY is not set. Generation calls will fail until it is.');
   }
 });
