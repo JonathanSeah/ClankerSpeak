@@ -1,0 +1,1 @@
+To run app.py use the following command: streamlit run app.py
