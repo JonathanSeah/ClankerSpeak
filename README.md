@@ -25,10 +25,10 @@ npm install
 cp .env.example .env
 ```
 
-Open `.env` and add your Google AI Studio API key:
+Open `.env` and add your OpenRouter API key:
 
 ```
-GOOGLE_API_KEY=AIza...
+OPENROUTER_API_KEY=
 ```
 
 If you want the "Ask the assistant" tab to work, also add your Botpress bot's public IDs (find them under your bot's **Webchat → Share/Embed** settings in Botpress Cloud — these are client-side identifiers, not secrets):
