@@ -2,10 +2,11 @@ import base64
 import json
 import urllib.request
 import urllib.error
-import app as st
 import os
 import uuid
 from typing import List
+
+import streamlit as st
 
 # Try to import openpyxl for xlsx handling; if unavailable, we'll disable XLSX features
 try:
@@ -48,7 +49,7 @@ def rerun_app() -> None:
 
 OLLAMA_MODEL = "qwen2.5-coder:7b"
 OLLAMA_BASE_URL = "http://localhost:11434"
-AI_SYSTEM_PROMPT_DEFAULT = "You are a helpful and concise assistant. Answer clearly and thoughtfully. Use any of the provided sources to inform your answers, and cite them when relevant. If the user asks for information not covered by the sources, respond with 'I don't know.'"
+AI_SYSTEM_PROMPT_DEFAULT = "You are a helpful and concise assistant. Your goal is to provide important key points and summarise them in a presentation format like bullet points. Use the sources provided to achieve said goals."
 
 st.set_page_config(page_title="Local Ollama Chat", page_icon="🤖")
 st.write(f"Chat with a locally running Ollama model ({OLLAMA_MODEL}).")
